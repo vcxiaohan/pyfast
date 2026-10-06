@@ -19,6 +19,9 @@ class Article(Base):
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default=ArticleStatus.DRAFT, comment="状态")
     view_count: Mapped[int] = mapped_column(Integer, default=0, comment="阅读量")
+    # 下面两个由 AI 分析后写入，刚创建时是 NULL
+    summary: Mapped[str | None] = mapped_column(Text, comment="AI 摘要")
+    recommend_score: Mapped[int | None] = mapped_column(Integer, comment="AI 推荐值，1~10")
     author_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id", ondelete="RESTRICT"), index=True)
 
     author: Mapped["User"] = relationship(back_populates="articles")

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from models.user import UserRole
 
@@ -22,8 +22,9 @@ class UserBriefSchema(BaseModel):
 
 
 class UserLoginSchema(BaseModel):
-    email: EmailStr
-    password: str
+    # 示例是 init_data.py 里的作者张三，方便在 /docs 里直接登录测试
+    email: EmailStr = Field(examples=["zhangsan@test.com"])
+    password: str = Field(examples=["123456"])
 
 
 class TokenSchema(BaseModel):

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # JWT 签名密钥，泄露了别人就能伪造任意用户的 token，只能放在 .env 里
     JWT_SECRET_KEY: str
     JWT_EXPIRES: timedelta = timedelta(days=1)
+    # 后台任务的状态存在 Redis 里
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
+    # 通义千问（阿里云百炼）的 API Key
+    DASHSCOPE_API_KEY: str
 
 
 settings = Settings()

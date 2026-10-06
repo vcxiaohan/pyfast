@@ -46,6 +46,15 @@ async def get_current_user(
     return user
 
 
+async def get_author_user(
+        user: User = Depends(get_current_user)
+) -> User:
+    # 浏览者只能看，作者和管理员才能写文章
+    if user.role not in (UserRole.AUTHOR, UserRole.ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")
+    return user
+
+
 async def get_admin_user(
         user: User = Depends(get_current_user)
 ) -> User:
