@@ -1,0 +1,15 @@
+# 密钥和数据库密码
+.env
+
+# 虚拟环境
+.venv/
+
+# Python 缓存
+__pycache__/
+*.pyc
+.ruff_cache/
+
+# 编辑器和系统文件
+.idea/
+.vscode/
+.DS_Store
