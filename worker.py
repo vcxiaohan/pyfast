@@ -6,12 +6,14 @@
 
 import asyncio
 import logging
+import signal
 from datetime import datetime
 
 from aio_pika.abc import AbstractChannel, AbstractIncomingMessage
 
 from agents.checkpointer import close_checkpointer, open_checkpointer
 from agents.export_analysis import analyze_export
+from core.cache import redis_client, set_export_progress
 from core.mq import connect, declare_queues, publish_export_task
 from models import AsyncSessionFactory
 from models.export_task import ExportStatus, ExportTask
@@ -37,8 +39,9 @@ async def process(task_id: str) -> None:
         await session.commit()
         params, thread_id = task.params, task.thread_id
 
-    output = await generate_order_export(params)
+    output = await generate_order_export(task_id, params)
     result = output["result"]
+    await set_export_progress(task_id, 95, "AI 正在分析数据")
     try:
         analysis = await analyze_export(thread_id, result["date_range"], output["row_count"], result["summary"])
     except Exception:
@@ -103,6 +106,13 @@ async def handle(message: AbstractIncomingMessage, channel: AbstractChannel) -> 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # docker stop 和发布时先发 SIGTERM：不再接新任务，手上这个做完再退出。
+    # 直接退出也不会丢任务（没 ack 的消息会重新投递），只是做了一半的要从头再来
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+
     await open_checkpointer()
     connection = await connect()
     try:
@@ -110,13 +120,26 @@ async def main() -> None:
         # 一次只取一条：导出要跑很久，多取的消息只能在这里干等，不如留给别的 worker
         await channel.set_qos(prefetch_count=1)
         queue = await declare_queues(channel)
-        logger.info("worker 已启动，等待导出任务")
-        async with queue.iterator() as messages:
-            async for message in messages:
+
+        busy = asyncio.Lock()
+
+        async def on_message(message: AbstractIncomingMessage) -> None:
+            async with busy:
                 await handle(message, channel)
+
+        consumer_tag = await queue.consume(on_message)
+        logger.info("worker 已启动，等待导出任务")
+        await stop.wait()
+
+        logger.info("收到退出信号，不再接新任务，等手上的任务做完")
+        await queue.cancel(consumer_tag)
+        async with busy:
+            pass
     finally:
         await connection.close()
         await close_checkpointer()
+        await redis_client.aclose()
+    logger.info("worker 已退出")
 
 
 if __name__ == "__main__":

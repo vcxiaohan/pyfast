@@ -13,6 +13,9 @@ from .checkpointer import get_checkpointer
 from .llms import qwen_llm
 from .prompts import ASSISTANT_SYSTEM_PROMPT
 
+# 查询工具的结果直接推成卡片，前端按 type 画指标卡或图表
+CARD_TOOLS = {"query_overview": "kpi", "query_trend": "chart", "query_ranking": "chart"}
+
 
 async def stream_assistant(content: str, thread_id: str, token: str) -> AsyncIterator[str | dict]:
     """产出两种东西：str 是模型的回复文字，dict 是要在前端渲染的卡片。"""
@@ -53,9 +56,11 @@ async def stream_assistant(content: str, thread_id: str, token: str) -> AsyncIte
             yield chunk.content
         elif node == "tools":
             # 工具返回的结构化结果在 artifact 里；导出任务建好就推一张卡片，卡片自己轮询进度
-            result = chunk.artifact["structured_content"] if chunk.artifact else {}
+            result = (chunk.artifact or {}).get("structured_content") or {}
             if chunk.name == "export_orders" and result.get("task_id"):
                 yield {"type": "export", **result}
+            elif chunk.name in CARD_TOOLS and chunk.status != "error" and result:
+                yield {"type": CARD_TOOLS[chunk.name], **result}
             elif chunk.name == "export_orders" and chunk.status == "error":
                 # return_direct 报错时也直接结束，模型没机会解释，把工具给的原因直接告诉用户
                 yield ("" if last_text.endswith("\n") else "\n") + f"导出没成功：{chunk.text}"

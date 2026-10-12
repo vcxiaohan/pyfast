@@ -1,0 +1,57 @@
+# pyfast 的编排文件：api 和 worker 用同一个镜像，只是启动命令不同。
+# 本地：docker compose up --build
+# 线上：服务器上不放源代码、不构建，部署脚本先 docker compose pull 拉指定版本，再 docker compose up -d --no-build
+# Postgres、Redis、RabbitMQ、OSS 都是外部服务（线上用阿里云的），地址写在 .env.production 里，这里不起这些容器
+
+# Docker 默认不限制日志文件大小，必须配置，否则日志会把磁盘写满
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "3"
+
+x-app: &app
+  # 线上由部署脚本指定镜像仓库地址和版本号；本地不传就用本地构建的 pyfast:local
+  image: ${IMAGE:-pyfast:local}
+  build: .
+  env_file: .env.production
+  # 用一个很小的 init 进程当 1 号进程，负责转发信号、回收僵尸进程
+  init: true
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  # 一次性任务：先把数据库表结构迁移到最新，跑完就退出，api 和 worker 等它成功后才启动。
+  # 多台机器部署时，迁移要挪到发布流水线里只跑一次，不然几台机器会同时迁移
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # 只绑定本机地址：用户的请求由前端 Next 转发过来，MCP 也只在本机访问，公网不能直接打到 api
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 3
+    # 发布时给正在进行的 AI 对话一点时间说完，超过才强制杀掉
+    stop_grace_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["python", "worker.py"]
+    # worker 收到 SIGTERM 会把手上的导出做完再退出，这个时间要比最慢的一次导出长，否则做到一半被强制杀掉
+    # 要多几个 worker 并行处理：docker compose up -d --scale worker=3，RabbitMQ 会把任务轮流分给它们
+    stop_grace_period: 5m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

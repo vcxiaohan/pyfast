@@ -2,12 +2,14 @@
 
 import asyncio
 import io
+import math
 from datetime import timedelta
 from typing import Literal
 from uuid import uuid4
 
 import pandas as pd
 
+from core.cache import get_export_progress, set_export_progress
 from core.oss import sign_download_url, upload
 from models import AsyncSessionFactory
 from models.export_task import ExportStatus, ExportTask
@@ -91,11 +93,15 @@ def to_xlsx(df: pd.DataFrame) -> bytes:
     return buffer.getvalue()
 
 
-async def generate_order_export(params: dict) -> dict:
-    """按任务里存的条件分页拉订单、算统计摘要、写 Excel。返回要写回任务表的字段。"""
+async def generate_order_export(task_id: str, params: dict) -> dict:
+    """按任务里存的条件分页拉订单、算统计摘要、写 Excel。返回要写回任务表的字段。
+
+    进度分配：拉数据 0~70%（按已拉行数算），生成 Excel 75%，上传 90%，worker 写解读 95%。
+    """
     query = OrderQuery(**params["query"])
     fields: list[OrderField] = params["fields"]
 
+    await set_export_progress(task_id, 0, "正在拉取数据")
     rows: list[dict] = []
     page = 1
     while True:
@@ -103,12 +109,14 @@ async def generate_order_export(params: dict) -> dict:
         if total > MAX_ROWS:
             raise ExportError(f"共 {total} 行，超过 {MAX_ROWS} 行的上限，请缩小时间范围或增加筛选条件")
         rows.extend(items)
+        # 第一页就能拿到总行数，之后每拉完一页都知道完成了几成
+        if total:
+            await set_export_progress(task_id, len(rows) * 70 // total, f"正在拉取数据 {len(rows):,} / {total:,} 行")
+        if settings.EXPORT_DEMO_DELAY:
+            await asyncio.sleep(settings.EXPORT_DEMO_DELAY / max(1, math.ceil(total / PAGE_SIZE)))
         if page * PAGE_SIZE >= total:
             break
         page += 1
-
-    if settings.EXPORT_DEMO_DELAY:
-        await asyncio.sleep(settings.EXPORT_DEMO_DELAY)
 
     result = {"date_range": f"{query.start_date} ~ {query.end_date}", "columns": [FIELD_LABELS[f] for f in fields]}
     if not rows:
@@ -129,8 +137,10 @@ async def generate_order_export(params: dict) -> dict:
     df = df.rename(columns=FIELD_LABELS)
 
     # 写 Excel 是阻塞操作，放到线程里执行，不卡住事件循环；在内存里生成，不落本地磁盘
+    await set_export_progress(task_id, 75, "正在生成 Excel")
     data = await asyncio.to_thread(to_xlsx, df)
     file_key = f"exports/{uuid4().hex}.xlsx"
+    await set_export_progress(task_id, 90, "正在上传文件")
     await upload(file_key, data, XLSX_TYPE)
 
     return {
@@ -159,6 +169,8 @@ async def get_task_view(task_id: str, user_id: int) -> dict | None:
         "summary": result.get("summary"),
         "error": task.error_msg if task.status == ExportStatus.FAILED else None,
     }
+    if task.status == ExportStatus.RUNNING:
+        view["progress"] = await get_export_progress(task.id)
     # 下载链接每次查询时现签，10 分钟过期后再查一次就能拿到新链接；浏览器拿着链接直接从 OSS 下载
     if task.status == ExportStatus.DONE and task.file_key:
         view["download_url"] = sign_download_url(task.file_key, task.file_name, DOWNLOAD_EXPIRES)

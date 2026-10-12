@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=Path(__file__).parent / ".env", extra="ignore")
 
     DB_URI: str
+    # 打印每条执行的 SQL，本地调试时在 .env 里设 SQL_ECHO=true；线上保持关闭，日志量太大。
+    # worker 配了根日志，打开后 worker 里每条 SQL 会打两遍
+    SQL_ECHO: bool = False
     # JWT 签名密钥，泄露了别人就能伪造任意用户的 token，只能放在 .env 里
     JWT_SECRET_KEY: str
     JWT_EXPIRES: timedelta = timedelta(days=1)

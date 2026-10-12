@@ -1,0 +1,16 @@
+# 密钥不能打进镜像：镜像会推到仓库，谁能拉镜像谁就能看到。运行时由 compose 的 env_file 传进去
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+.venv
+__pycache__
+*.pyc
+.ruff_cache
+.git
+.idea
+.vscode
+.DS_Store
+exports
+test.py

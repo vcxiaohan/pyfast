@@ -1,5 +1,6 @@
 # 密钥和数据库密码
 .env
+.env.production
 
 # 虚拟环境
 .venv/

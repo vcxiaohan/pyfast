@@ -37,7 +37,7 @@ _COLUMNS = {
 }
 
 
-def _filter(stmt, query: OrderQuery):
+def filter_orders(stmt, query: OrderQuery):
     stmt = (
         stmt.select_from(MallOrder)
         .join(Product, Product.id == MallOrder.product_id)
@@ -59,10 +59,10 @@ def _filter(stmt, query: OrderQuery):
 async def list_orders(query: OrderQuery, page: int, size: int) -> tuple[list[dict], int]:
     """按下单时间分页查订单，返回 (这一页的订单, 总条数)。page 从 1 开始。"""
     async with AsyncSessionFactory() as session:
-        total = await session.scalar(_filter(select(func.count()), query))
+        total = await session.scalar(filter_orders(select(func.count()), query))
         # 加上 id 排序：下单时间相同的订单顺序固定，翻页时不会漏行或重复
         stmt = (
-            _filter(select(*_COLUMNS.values()), query)
+            filter_orders(select(*_COLUMNS.values()), query)
             .order_by(MallOrder.create_time, MallOrder.id)
             .offset((page - 1) * size)
             .limit(size)

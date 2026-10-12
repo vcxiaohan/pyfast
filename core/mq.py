@@ -11,6 +11,8 @@ from settings import settings
 EXPORT_QUEUE = "export.tasks"
 # 死信队列：重试次数用完的消息转到这里，留着排查，不会丢
 EXPORT_DEAD_QUEUE = "export.tasks.dead"
+# 死信要经过一个交换机转发。不用默认交换机（空字符串）：阿里云 RabbitMQ 没说明支持拿它当死信交换机
+EXPORT_DLX = "export.dlx"
 
 _connection: AbstractRobustConnection | None = None
 _channel: AbstractChannel | None = None
@@ -22,13 +24,18 @@ async def connect() -> AbstractRobustConnection:
 
 
 async def declare_queues(channel: AbstractChannel) -> AbstractQueue:
-    """API 和 worker 启动时都声明一遍，谁先启动都行；队列已存在且参数相同时什么都不做。"""
-    await channel.declare_queue(EXPORT_DEAD_QUEUE, durable=True)
-    # durable：RabbitMQ 重启后队列还在。被 reject 的消息按下面的参数转进死信队列
+    """API 和 worker 启动时都声明一遍，谁先启动都行；已存在且参数相同时什么都不做。
+
+    队列的死信参数建好后不能改（阿里云上也不行），要改只能删掉队列重建。
+    """
+    dlx = await channel.declare_exchange(EXPORT_DLX, aio_pika.ExchangeType.DIRECT, durable=True)
+    dead_queue = await channel.declare_queue(EXPORT_DEAD_QUEUE, durable=True)
+    await dead_queue.bind(dlx, routing_key=EXPORT_DEAD_QUEUE)
+    # durable：RabbitMQ 重启后队列还在。被 reject 的消息发给死信交换机，再按 routing key 进死信队列
     return await channel.declare_queue(
         EXPORT_QUEUE,
         durable=True,
-        arguments={"x-dead-letter-exchange": "", "x-dead-letter-routing-key": EXPORT_DEAD_QUEUE},
+        arguments={"x-dead-letter-exchange": EXPORT_DLX, "x-dead-letter-routing-key": EXPORT_DEAD_QUEUE},
     )
 
 

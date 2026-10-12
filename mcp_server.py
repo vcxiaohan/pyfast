@@ -12,6 +12,7 @@ from core.auth import decode_access_token
 from mcp_tools.export import export_orders, get_export_status
 from mcp_tools.order import get_order_detail
 from mcp_tools.product import get_all_products
+from mcp_tools.stats import query_overview, query_ranking, query_trend
 
 
 class JwtTokenVerifier(TokenVerifier):
@@ -28,7 +29,10 @@ class JwtTokenVerifier(TokenVerifier):
 mcp = FastMCP(
     name="biz-data",
     auth=JwtTokenVerifier(),
-    tools=[get_order_detail, get_all_products, export_orders, get_export_status],
+    tools=[
+        get_order_detail, get_all_products, export_orders, get_export_status,
+        query_overview, query_trend, query_ranking,
+    ],
 )
 
 # 无状态模式：每个请求独立处理，多实例部署时不用做会话保持

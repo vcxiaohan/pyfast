@@ -32,6 +32,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+# 给 Docker 和负载均衡做健康检查。只说明进程活着、能接请求，不查数据库：
+# 数据库抖一下就把所有实例判成不健康、全部摘掉，反而整个服务不可用
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 app.include_router(user_router)
 app.include_router(article_router)
 app.include_router(article_tag_router)

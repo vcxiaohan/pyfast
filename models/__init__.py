@@ -4,12 +4,12 @@ from sqlalchemy import DateTime, MetaData, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-from settings import DB_URI
+from settings import DB_URI, settings
 
 engine = create_async_engine(
     DB_URI,
     # 将输出所有执行SQL的日志（默认是关闭的）
-    echo=True,
+    echo=settings.SQL_ECHO,
     # 连接池大小（默认是5个）
     pool_size=10,
     # 允许连接池最大的连接数（默认是10个）
