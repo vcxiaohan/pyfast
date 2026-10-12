@@ -54,4 +54,4 @@ class Base(DeclarativeBase):
     update_time: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
 
 
-from . import article, mall, user  # noqa: E402  必须放在 Base 定义之后，否则模型文件导入 Base 时会循环导入
+from . import article, export_task, mall, user  # noqa: E402  必须放在 Base 定义之后，否则模型文件导入 Base 时会循环导入

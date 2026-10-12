@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     DASHSCOPE_API_KEY: str
     # 拼下载链接用的服务地址，线上改成对外的域名
     PUBLIC_BASE_URL: str = "http://127.0.0.1:8000"
+    # 中台数据助手连接 MCP 的地址：必须是本机，不能经过负载均衡，否则请求可能被转到别的实例
+    MCP_INTERNAL_URL: str = "http://127.0.0.1:8000/ai/mcp"
 
 
 settings = Settings()
