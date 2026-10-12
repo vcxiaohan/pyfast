@@ -9,7 +9,7 @@ from fastmcp.server.auth import TokenVerifier
 from fastmcp.server.auth.auth import AccessToken
 
 from core.auth import decode_access_token
-from mcp_tools.export import export_orders
+from mcp_tools.export import export_orders, get_export_status
 from mcp_tools.order import get_order_detail
 from mcp_tools.product import get_all_products
 
@@ -25,7 +25,11 @@ class JwtTokenVerifier(TokenVerifier):
         return AccessToken(token=token, client_id=str(user_id), scopes=[])
 
 
-mcp = FastMCP(name="biz-data", auth=JwtTokenVerifier(), tools=[get_order_detail, get_all_products, export_orders])
+mcp = FastMCP(
+    name="biz-data",
+    auth=JwtTokenVerifier(),
+    tools=[get_order_detail, get_all_products, export_orders, get_export_status],
+)
 
 # 无状态模式：每个请求独立处理，多实例部署时不用做会话保持
 mcp_app = mcp.http_app(stateless_http=True)

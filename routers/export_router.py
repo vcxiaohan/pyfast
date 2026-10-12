@@ -1,28 +1,17 @@
-import jwt
-from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from core.auth import decode_download_token
-from mcp_tools.export import EXPORT_DIR
+from dependencies import get_current_user
+from models.user import User
+from services.export_service import get_task_view
 
 router = APIRouter(prefix="/export", tags=["export"])
 
 
-# 链接本身就是凭证：token 里签了文件名和过期时间，浏览器直接打开就能下载，不需要再带登录态
-@router.get("/download")
-async def download_export(token: str):
-    try:
-        file, name = decode_download_token(token)
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="下载链接已过期，请重新导出")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="下载链接无效")
-
-    path = EXPORT_DIR / file
-    if not path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
-    return FileResponse(
-        path,
-        filename=name,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+# 前端导出卡片轮询用。统计摘要是给模型的，卡片只要解读文字
+@router.get("/tasks/{task_id}")
+async def get_export_task(task_id: str, user: User = Depends(get_current_user)):
+    view = await get_task_view(task_id, user.id)
+    if view is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="导出任务不存在")
+    view.pop("summary")
+    return view

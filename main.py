@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from agents.checkpointer import close_checkpointer, open_checkpointer
 from core.cache import redis_client
+from core.mq import close_mq, open_mq
 from mcp_server import mcp_app
 from routers.article_router import router as article_router
 from routers.article_tag_router import router as article_tag_router
@@ -20,9 +21,11 @@ async def lifespan(app: FastAPI):
     # 启动时试连一次 Redis，没开就直接启动失败，而不是等到调接口才报 500
     await redis_client.ping()
     await open_checkpointer()
+    await open_mq()
     # 挂载的子应用的 lifespan 不会被 FastAPI 执行，MCP 的会话管理器要在这里手动启动，否则调 /ai/mcp 会报错
     async with mcp_app.lifespan(app):
         yield
+    await close_mq()
     await close_checkpointer()
     await redis_client.aclose()
 
