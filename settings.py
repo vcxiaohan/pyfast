@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://127.0.0.1:6379/0"
     # 通义千问（阿里云百炼）的 API Key
     DASHSCOPE_API_KEY: str
+    # 拼下载链接用的服务地址，线上改成对外的域名
+    PUBLIC_BASE_URL: str = "http://127.0.0.1:8000"
 
 
 settings = Settings()

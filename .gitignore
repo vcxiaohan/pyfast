@@ -9,6 +9,9 @@ __pycache__/
 *.pyc
 .ruff_cache/
 
+# 导出的报表文件
+exports/
+
 # 编辑器和系统文件
 .idea/
 .vscode/

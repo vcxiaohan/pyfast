@@ -1,3 +1,8 @@
-txt = "112233{q}--{w}00"
-print(txt.format_map({"q":"*", "w": "[]"}))
-print(txt.format(**{"q":"*", "w": "[]"}))
+# 运行完立刻退出
+print("hello")
+
+# 永远不退出，也没有监听端口，相当于 Node 里的 setInterval
+import time
+while True:
+    print("tick")
+    time.sleep(1)
